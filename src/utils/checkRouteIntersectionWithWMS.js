@@ -7,12 +7,10 @@ export const checkRouteIntersectionWithWMS = async (polyline) => {
     const layers = ["ne:D2_Polygon", "ne:D4_Polygon"]; // Toll road layers
     let onTollRoad = false;
     let totalIntersectionDistance = 0;
-
     // Extract polyline coordinates as WKT LINESTRING
     const latLngs = polyline.getLatLngs();
     const wktCoordinates = latLngs.map(({ lat, lng }) => `${lng} ${lat}`).join(", ");
     const wktLineString = `LINESTRING(${wktCoordinates})`;
-
     // Convert polyline to Turf.js format
     const routeLine = turf.lineString(latLngs.map(({ lat, lng }) => [lng, lat]));
 
