@@ -4,6 +4,8 @@ import "leaflet/dist/leaflet.css";
 import "font-awesome/css/font-awesome.min.css";
 import "./index.css";
 import { haversineDistance } from "./utils/haversineDistance";
+import {getEntryTimeFromAPI} from "./utils/getEntryTimeFromAPI";
+import { checkRouteIntersectionWithWMS } from "./utils/checkRouteIntersectionWithWMS";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import "leaflet-routing-machine";
@@ -75,8 +77,6 @@ const App = () => {;
         map.remove();
       };
     }, []);
-  
-
   // Fetch the coordinates from the API
   const fetchCoordinates = async () => {
     const url = `http://tolldata.quantasip.com/get-coordinates`;
@@ -120,72 +120,6 @@ const App = () => {;
       exitTime: exitTime || prevInfo.exitTime,
       alertMessage, // Update the alertMessage directly
     }));
-  };
-  const checkRouteIntersectionWithWMS = async (polyline) => {
-    const wmsLayerUrl = "http://gs.quantasip.com/geoserver/ne/wms"; // GeoServer WMS URL
-    const proxyUrl = "http://3.109.124.23:3000/proxy"; // Proxy to handle CORS
-    const layers = ["ne:D2_Polygon", "ne:D4_Polygon"]; // Toll road layers
-    let onTollRoad = false;
-    let totalIntersectionDistance = 0;
-  
-    // Extract polyline coordinates as WKT LINESTRING
-    const latLngs = polyline.getLatLngs();
-    const wktCoordinates = latLngs.map(({ lat, lng }) => `${lng} ${lat}`).join(", ");
-    const wktLineString = `LINESTRING(${wktCoordinates})`;
-  
-    // Iterate through the layers
-    for (const layer of layers) {
-      const WMSurl = `${wmsLayerUrl}?service=WFS&version=1.0.0&request=GetFeature&typeName=${layer}&outputFormat=application/json&cql_filter=INTERSECTS(geom, ${wktLineString})`;
-      const url = `${proxyUrl}?url=${encodeURIComponent(WMSurl)}`;
-  
-      try {
-        // Fetch the WFS response
-        const response = await fetch(url);
-        const responseText = await response.text(); // Get response as text
-  
-        if (response.headers.get("Content-Type").includes("application/json")) {
-          // Parse JSON response
-          const data = JSON.parse(responseText);
-  
-          // Check if there are intersecting features
-          if (data.features && data.features.length > 0) {
-            onTollRoad = true;
-  
-            // Iterate through each intersecting feature
-            for (const feature of data.features) {
-              if (feature.geometry.type === "MultiPolygon") {
-                // Flatten all coordinates of the MultiPolygon
-                const allCoordinates = feature.geometry.coordinates.flat(2);
-  
-                // Calculate the total intersection distance
-                let featureIntersectionDistance = 0;
-                for (let i = 0; i < allCoordinates.length - 1; i++) {
-                  const [lon1, lat1] = allCoordinates[i];
-                  const [lon2, lat2] = allCoordinates[i + 1];
-                  featureIntersectionDistance += haversineDistance(lat1, lon1, lat2, lon2);
-                }
-  
-                console.log(`Intersection distance for feature: ${featureIntersectionDistance} meters.`);
-                totalIntersectionDistance += featureIntersectionDistance; // Add to total
-              }
-            }
-  
-            break; // Stop checking further if intersections are found
-          }
-        } else {
-          console.error("Unknown response format:", responseText);
-        }
-      } catch (error) {
-        console.error("Error checking route intersection with WMS:", error);
-      }
-    }
-  
-    if (onTollRoad) {
-      console.log(`Total intersection distance: ${totalIntersectionDistance} meters.`);
-    } else {
-      console.log("No intersection found with toll roads.");
-    }
-    return { onTollRoad, totalIntersectionDistance };
   };
   const startCarAnimation = (coordinates) => {
     if (coordinates.length < 2) return;
@@ -233,7 +167,7 @@ const App = () => {;
       const distance = haversineDistance(lat1, lon1, lat2, lon2);
   
       // Only add the trip if the distance is greater than 1.5 km
-      if (distance > 0.0) {
+      if (distance > 0.75) {
         tripsArray.push({
           tripName: `Trip ${tripCounter}`,
           from: validCoordinates[i],
@@ -252,41 +186,6 @@ const App = () => {;
     // Set car marker at the last valid coordinate
     carMarker.setLatLng(validCoordinates[validCoordinates.length - 1]);
     mapRef.current.setView(validCoordinates[validCoordinates.length - 1], 15); // Adjust zoom level (15) for ~2 km radius
-  };
-  const getEntryTimeFromAPI = async (lat, lon) => {
-    const apiUrl = "http://tolldata.quantasip.com/get-coordinates"; // API URL
-    try {
-      const response = await fetch(apiUrl);
-      const data = await response.json(); // Parse the JSON response
-  
-      // Iterate over the API response to check for matching coordinates
-      for (const entry of data) {
-        const apiLat = entry.gps_lat;
-        const apiLon = entry.gps_long;
-  
-        // Check if the coordinates are within a certain tolerance (e.g., 0.0001 degrees)
-        if (Math.abs(lat - apiLat) < 0.0001 && Math.abs(lon - apiLon) < 0.0001) {
-          // If coordinates match, convert the timestamp to a readable date-time format
-          const entryTimestamp = new Date(parseInt(entry.gps_timestamp));
-  
-          // Format the date as MM/DD/YYYY
-          const date = entryTimestamp.toLocaleDateString();
-  
-          // Format the time as HH:MM:SS
-          const time = entryTimestamp.toLocaleTimeString();
-  
-          // Return both date and time as a single string
-          return `${date} ${time}`;
-        }
-      }
-      // If no match found, return null or some default value
-      console.log("No matching coordinates found.");
-      return null;
-  
-    } catch (error) {
-      console.error("Error fetching coordinates from API:", error);
-      return null;
-    }
   };
   const highlightSelectedTrip = async (trip) => {
     if (!trip || !trip.from || !trip.to) return; // Ensure the trip is valid
@@ -380,7 +279,6 @@ const App = () => {;
             <strong>Timestamp:</strong> ${exit}
           </div>`
       );
-  
     // Store references for later removal
     mapRef.current.startMarker = startMarker;
     mapRef.current.endMarker = endMarker;
