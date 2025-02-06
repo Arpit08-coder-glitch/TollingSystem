@@ -222,10 +222,9 @@ const App = () => {;
     let enteredTollRoad = false;
     let entry= await getEntryTimeFromAPI(from[0], from[1]); // Initialize entry time
     let exit= await getEntryTimeFromAPI(to[0], to[1]); // Initialize exit time
-  
     // Check if the polyline intersects with a toll road
     const { onTollRoad, totalIntersectionDistance } = await checkRouteIntersectionWithWMS(polyline);
-    tollDistance = totalIntersectionDistance / 1000; // Convert meters to km
+    tollDistance = totalIntersectionDistance; // Convert meters to km
     tollCost = tollDistance * 2; // ₹2/km
     if (onTollRoad) {
       console.log(`The polyline intersects with a toll road. Distance: ${totalIntersectionDistance} meters.`);
