@@ -64,8 +64,6 @@ const App = () => {;
   
     return map;
   };
-
-  
     useEffect(() => {
       // Initialize the map and layers
       const map = initializeMap(mapRef, fetchCoordinates);
