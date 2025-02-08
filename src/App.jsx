@@ -40,7 +40,7 @@ const App = () => {;
     // Add base layers
     const baseLayers = {};
     MAP_LAYERS.forEach(({ name, url }) => {
-      const layer = L.tileLayer(url, { maxZoom: 80, attribution: "© QuantaSIP" });
+      const layer = L.tileLayer(url, { maxZoom: 80, attribution: "© QuantaSIP", zIndex:100,});
       baseLayers[name] = layer;
       if (name === "Google Road Map") layer.addTo(map); // Default base layer
     });
@@ -56,6 +56,7 @@ const App = () => {;
     transparent: true,
     attribution,
     maxZoom: 80, // Set maximum zoom level to 80
+    zIndex:400,
   }).addTo(map);
 });  
     // Fetch and plot coordinates
