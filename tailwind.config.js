@@ -1,12 +1,8 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: ["./src/**/*.{html,js,jsx}"], // Include all files for Tailwind's purge feature
+export default {
+  content: ["./src/**/*.{js,jsx,ts,tsx}"], // Adjust if necessary
   theme: {
-    extend: {
-      colors: {
-        customDark: "#242424", // Optional: Your custom dark color
-      },
-    },
+    extend: {},
   },
   plugins: [],
 };
