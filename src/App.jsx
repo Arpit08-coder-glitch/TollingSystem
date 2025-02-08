@@ -146,7 +146,6 @@ const App = () => {;
           to: validCoordinates[i + 1],
           distance: distance, // Store the distance for reference
         });
-  
         // Increment the trip counter for the next trip
         tripCounter++;
       }
