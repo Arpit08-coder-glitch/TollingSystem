@@ -4,15 +4,14 @@ import "leaflet/dist/leaflet.css";
 import "font-awesome/css/font-awesome.min.css";
 import "./index.css";
 import { haversineDistance } from "./utils/haversineDistance";
-import {getEntryTimeFromAPI} from "./utils/getEntryTimeFromAPI";
-import { checkRouteIntersectionWithWMS } from "./utils/checkRouteIntersectionWithWMS";
+import { highlightSelectedTrip } from "./utils/highlightSelectedTrip";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
+import { fetchCoordinates } from "./utils/fetchCoordinates";
 import "leaflet-routing-machine";
 
 const App = () => {;
   const mapRef = useRef(null); // Reference for the map
-  let [featureCoordinates, setFeatureCoordinates] = useState([]);
   const [trips, setTrips] = useState([]); // State to store trips array
   let [carMarker, setCarMarker] = useState(null);
   const [selectedTrip, setSelectedTrip] = useState(null); // To store the selected trip
@@ -58,11 +57,9 @@ const App = () => {;
     attribution,
     maxZoom: 80, // Set maximum zoom level to 80
   }).addTo(map);
-});
-
-  
+});  
     // Fetch and plot coordinates
-    fetchCoordinates();
+    fetchCoordinates(startCarAnimation);
   
     return map;
   };
@@ -78,31 +75,6 @@ const App = () => {;
       };
     }, []);
   // Fetch the coordinates from the API
-  const fetchCoordinates = async () => {
-    const url = `http://tolldata.quantasip.com/get-coordinates`;
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-
-        // Map the received data to include [lat, lng, timestamp]
-        featureCoordinates = data.map((coordinate) => {
-          return [
-            coordinate.gps_lat,
-            coordinate.gps_long,
-            coordinate.gps_timestamp,
-          ]; // Map gps_lat, gps_long, and gps_timestamp
-        });
-
-        // Start car animation with the fetched coordinates
-        startCarAnimation(featureCoordinates);
-      } else {
-        console.error("Error fetching coordinates");
-      }
-    } catch (error) {
-      console.error("Error fetching coordinates:", error);
-    }
-  };
   // Update info box
   const updateInfoBox = (
     totalDistance,
@@ -181,110 +153,13 @@ const App = () => {;
     }
      // Set trips state to the updated tripsArray
      setTrips(tripsArray);
-
-  
     // Set car marker at the last valid coordinate
     carMarker.setLatLng(validCoordinates[validCoordinates.length - 1]);
     mapRef.current.setView(validCoordinates[validCoordinates.length - 1], 15); // Adjust zoom level (15) for ~2 km radius
   };
-  const highlightSelectedTrip = async (trip) => {
-    if (!trip || !trip.from || !trip.to) return; // Ensure the trip is valid
-  
-    const { from, to } = trip;
-  
-    // Remove the previous start and end markers if they exist
-    if (mapRef.current.startMarker) {
-      mapRef.current.startMarker.remove();
-    }
-    if (mapRef.current.endMarker) {
-      mapRef.current.endMarker.remove();
-    }
-    if (mapRef.current.polyline) {
-      mapRef.current.polyline.remove(); // Remove existing polyline
-    }
-  
-    // Create a polyline from start to end points
-    const polyline = L.polyline([from, to], {
-      color: "blue",
-      weight: 5,
-      opacity: 1,
-    }).addTo(mapRef.current);
-  
-    // Store reference for future removal
-    mapRef.current.polyline = polyline;
-  
-    // Calculate the total distance using the Haversine formula
-    const totalDistance = haversineDistance(from[0], from[1], to[0], to[1]).toFixed(2); // Distance in km
-
-    // Track toll distances and costs
-    let tollDistance = 0;
-    let tollCost = 0;
-    let enteredTollRoad = false;
-    let entry= await getEntryTimeFromAPI(from[0], from[1]); // Initialize entry time
-    let exit= await getEntryTimeFromAPI(to[0], to[1]); // Initialize exit time
-    // Check if the polyline intersects with a toll road
-    const { onTollRoad, totalIntersectionDistance } = await checkRouteIntersectionWithWMS(polyline);
-    tollDistance = totalIntersectionDistance; // Convert meters to km
-    tollCost = tollDistance * 2; // ₹2/km
-    if (onTollRoad) {
-      console.log(`The polyline intersects with a toll road. Distance: ${totalIntersectionDistance} meters.`);
-    } else {
-      console.log("The polyline does not intersect with any toll road.");
-    }
-  
-    console.log(`Total Distance: ${totalDistance} km`);
-    // Handle toll road logic
-    if (onTollRoad) {
-      enteredTollRoad = true;
-      console.log(`Entered toll road at: ${entry}, distance: ${tollDistance} km`);
-    } else if (enteredTollRoad) {
-      enteredTollRoad = false;
-      console.log(`Exited toll road at: ${exit}`);
-    }
-    // Update your info box with toll info
-    updateInfoBox(totalDistance, tollDistance, tollCost, entry, exit);
-  
-    // Add Start and End Markers
-    const pointerIcon = L.divIcon({
-      html: `<div class="bg-blue-500 w-4 h-4 rounded-full"></div>`, // Blue dot as pointer
-      iconSize: [10, 10],
-      className: "",
-    });
-  
-    const startMarker = L.marker(from, {
-      icon: pointerIcon,
-      zIndexOffset: 1,
-    })
-      .addTo(mapRef.current)
-      .bindPopup(
-        `
-          <div>
-            <strong>Latitude:</strong> ${from[0]}<br>
-            <strong>Longitude:</strong> ${from[1]}<br>
-            <strong>Timestamp:</strong> ${entry}
-          </div>`
-      );
-  
-    const endMarker = L.marker(to, {
-      icon: pointerIcon,
-      zIndexOffset: 1,
-    })
-      .addTo(mapRef.current)
-      .bindPopup(
-        `
-          <div>
-            <strong>Latitude:</strong> ${to[0]}<br>
-            <strong>Longitude:</strong> ${to[1]}<br>
-            <strong>Timestamp:</strong> ${exit}
-          </div>`
-      );
-    // Store references for later removal
-    mapRef.current.startMarker = startMarker;
-    mapRef.current.endMarker = endMarker;
-  };
   const handleTripSelect = (trip) => {
     setSelectedTrip(trip); // Update selected trip
-    highlightSelectedTrip(trip); // Highlight the selected trip
+    highlightSelectedTrip(mapRef, trip, updateInfoBox); // Highlight the selected trip
   }; 
   return (
     <div className="relative h-screen w-full flex items-center justify-center">
