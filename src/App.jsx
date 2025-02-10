@@ -104,7 +104,6 @@ const App = () => {;
         id="map"
         className="w-[70%] h-[calc(100vh-48px)] mt-[100px] z-0"
       ></div>
-      
         <Sidebar
          info={info} trips={trips} onTripSelect={handleTripSelect} // Pass the handleTripSelect function to Sidebar
       />
