@@ -10,7 +10,7 @@ const Header = () => {
             <span className="text-white text-3xl font-bold">🚗</span>
           </div>
           <h1 className="text-2xl font-bold tracking-wide uppercase">
-            Toll Demo
+            Vehicle Tracking System
           </h1>
         </div>
         {/* CTA Button */}

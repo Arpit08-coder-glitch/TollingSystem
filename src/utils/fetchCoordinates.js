@@ -1,5 +1,5 @@
 export const fetchCoordinates = async (startCarAnimation) => {
-  const url = `https://vts.quantasip.com/vts/interval-gps-data?start_time=1740547743652&end_time=1740548569652`;
+  const url = `https://vts.quantasip.com/vts/all-gps-data`;
   try {
     const response = await fetch(url);
     if (response.ok) {
