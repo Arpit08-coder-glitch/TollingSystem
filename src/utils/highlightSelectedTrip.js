@@ -1,100 +1,94 @@
 import L from "leaflet";
-import { haversineDistance } from "./haversineDistance";
-import { getEntryTimeFromAPI } from "./getEntryTimeFromAPI";
-import { checkRouteIntersectionWithWMS } from "./checkRouteIntersectionWithWMS";
 
-export const highlightSelectedTrip = async (mapRef, trip, updateInfoBox) => {
- if (!trip || !trip.from || !trip.to) return; // Ensure the trip is valid
-   
-     const { from, to } = trip;
-   
-     // Remove the previous start and end markers if they exist
-     if (mapRef.current.startMarker) {
-       mapRef.current.startMarker.remove();
-     }
-     if (mapRef.current.endMarker) {
-       mapRef.current.endMarker.remove();
-     }
-     if (mapRef.current.polyline) {
-       mapRef.current.polyline.remove(); // Remove existing polyline
-     }
-   
-     // Create a polyline from start to end points
-     const polyline = L.polyline([from, to], {
-       color: "blue",
-       weight: 5,
-       opacity: 1,
-     }).addTo(mapRef.current);
-   
-     // Store reference for future removal
-     mapRef.current.polyline = polyline;
-   
-     // Calculate the total distance using the Haversine formula
-     const totalDistance = haversineDistance(from[0], from[1], to[0], to[1]).toFixed(2); // Distance in km
- 
-     // Track toll distances and costs
-     let tollDistance = 0;
-     let tollCost = 0;
-     let enteredTollRoad = false;
-     let entry= await getEntryTimeFromAPI(from[0], from[1]); // Initialize entry time
-     let exit= await getEntryTimeFromAPI(to[0], to[1]); // Initialize exit time
-     // Check if the polyline intersects with a toll road
-     const { onTollRoad, totalIntersectionDistance } = await checkRouteIntersectionWithWMS(polyline);
-     tollDistance = totalIntersectionDistance; // Convert meters to km
-     tollCost = tollDistance * 2; // ₹2/km
-     if (onTollRoad) {
-       console.log(`The polyline intersects with a toll road. Distance: ${totalIntersectionDistance} meters.`);
-     } else {
-       console.log("The polyline does not intersect with any toll road.");
-     }
-   
-     console.log(`Total Distance: ${totalDistance} km`);
-     // Handle toll road logic
-     if (onTollRoad) {
-       enteredTollRoad = true;
-       console.log(`Entered toll road at: ${entry}, distance: ${tollDistance} km`);
-     } else if (enteredTollRoad) {
-       enteredTollRoad = false;
-       console.log(`Exited toll road at: ${exit}`);
-     }
-     // Update your info box with toll info
-     updateInfoBox(totalDistance, tollDistance, tollCost, entry, exit);
-   
-     // Add Start and End Markers
-     const pointerIcon = L.divIcon({
-       html: `<div class="bg-blue-500 w-4 h-4 rounded-full"></div>`, // Blue dot as pointer
-       iconSize: [10, 10],
-       className: "",
-     });
-   
-     const startMarker = L.marker(from, {
-       icon: pointerIcon,
-       zIndexOffset: 1,
-     })
-       .addTo(mapRef.current)
-       .bindPopup(
-         `
-           <div>
-             <strong>Latitude:</strong> ${from[0]}<br>
-             <strong>Longitude:</strong> ${from[1]}<br>
-             <strong>Timestamp:</strong> ${entry}
-           </div>`
-       );
-   
-     const endMarker = L.marker(to, {
-       icon: pointerIcon,
-       zIndexOffset: 1,
-     })
-       .addTo(mapRef.current)
-       .bindPopup(
-         `
-           <div>
-             <strong>Latitude:</strong> ${to[0]}<br>
-             <strong>Longitude:</strong> ${to[1]}<br>
-             <strong>Timestamp:</strong> ${exit}
-           </div>`
-       );
-     // Store references for later removal
-     mapRef.current.startMarker = startMarker;
-     mapRef.current.endMarker = endMarker;
+export const highlightSelectedTrip = async (mapRef, startTimeStamp, endTimeStamp) => {
+  let featureCoordinates2;
+  
+  const url = `https://vts.quantasip.com/vts/interval-gps-data?start_time=${startTimeStamp}&end_time=${endTimeStamp}`;
+
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      featureCoordinates2 = data.map((coordinate) => {
+        return {
+          lat: coordinate.latitude,
+          lon: coordinate.longitude,
+          timestamp: coordinate.timestamp,
+        };
+      });
+    } else {
+      console.error("Error fetching coordinates");
+    }
+  } catch (error) {
+    console.error("Error fetching coordinates:", error);
+  }
+
+  if (featureCoordinates2 && featureCoordinates2.length > 0) {
+    // Create waypoints by accessing latitude and longitude
+    const waypoints = featureCoordinates2.map(coord => L.latLng(coord.lat, coord.lon));
+
+    // Clear existing route (if any)
+    if (mapRef.current.routingControl) {
+      mapRef.current.routingControl.getPlan().setWaypoints([]); // Clear waypoints
+      mapRef.current.removeControl(mapRef.current.routingControl); // Properly remove control
+      mapRef.current.routingControl = null; // Reset the reference
+    }
+
+    // Clear existing markers
+    if (mapRef.current.routeMarkers) {
+      mapRef.current.routeMarkers.forEach(marker => mapRef.current.removeLayer(marker));
+      mapRef.current.routeMarkers = [];
+    }
+    if (mapRef.current.markers) {
+      mapRef.current.markers.forEach(marker => marker.remove());
+      mapRef.current.markers = [];
+    } else {
+      mapRef.current.markers = [];
+    }
+
+    // Create a new route using Leaflet Routing Machine without instructions
+    mapRef.current.routingControl = L.Routing.control({
+      waypoints: waypoints,
+      routeWhileDragging: true,
+      showAlternatives: true,
+      altLineOptions: {
+        styles: [{ color: 'black', opacity: 0.15, weight: 9 }]
+      },
+      createMarker: () => null,  // No markers for waypoints
+      lineOptions: {
+        styles: [{ color: '#ff0000', weight: 4 }]
+      },
+      router: L.Routing.osrmv1({
+        show: false  // Hide instructions
+      })
+    }).addTo(mapRef.current);
+
+    // Store markers for easy removal later
+    mapRef.current.routeMarkers = [];
+
+    // Add popups with timestamp conversion
+    featureCoordinates2.forEach((coord) => {
+      const date = new Date(parseInt(coord.timestamp));
+      const formattedDate = date.toLocaleString();
+
+      const marker = L.marker([coord.lat, coord.lon])
+        .addTo(mapRef.current)
+        .bindPopup(`
+          <div>
+            <strong>Latitude:</strong> ${coord.lat}<br>
+            <strong>Longitude:</strong> ${coord.lon}<br>
+            <strong>Timestamp:</strong> ${formattedDate}
+          </div>
+        `);
+
+      // Store marker for future clearing
+      mapRef.current.routeMarkers.push(marker);
+    });
+
+    // Fit map bounds to the route
+    const bounds = L.latLngBounds(waypoints);
+    mapRef.current.fitBounds(bounds);
+  } else {
+    console.error("No coordinates available for routing");
+  }
 };
