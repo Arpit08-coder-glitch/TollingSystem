@@ -1,38 +1,38 @@
 import React, { useState } from "react";
 
-const Sidebar = ({ info, trips, onTripSelect }) => {
+const Sidebar = ({ info, onTripSelect, onPOints }) => {
   const [vehicleNumber] = useState("ABC1234");
-  const [selectedTrip, setSelectedTrip] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
-
-  // Convert timestamp to date format (YYYY-MM-DD)
-  const formatDate = (timestamp) => {
-    return new Date(parseInt(timestamp)).toISOString().split("T")[0];
-  };
 
   // Handle Date Change
   const handleDateChange = (e) => {
     setSelectedDate(e.target.value);
-    setSelectedTrip(""); // Reset selected trip when changing date
   };
 
-  // Handle Trip Change
-  const handleTripChange = (e) => {
-    setSelectedTrip(e.target.value);
+  // Convert selected date to start and end timestamps of that day
+  const getStartEndTimestamps = (dateString) => {
+    const date = new Date(dateString);
+    const startOfDay = new Date(date.setHours(0, 0, 0, 0)).getTime();
+    const endOfDay = new Date(date.setHours(23, 59, 59, 999)).getTime();
+    return { startOfDay, endOfDay };
   };
 
-  // Handle Search Button Click
+  const handleAllHistory = () => {
+    if (selectedDate) {
+      const { startOfDay, endOfDay } = getStartEndTimestamps(selectedDate);
+      onPOints(startOfDay, endOfDay);
+    } else {
+      alert("Please select a date first.");
+    }
+  };
   const handleSearch = () => {
-    const selectedTripIndex = parseInt(selectedTrip.replace("Trip ", "")) - 1;
-    const trip = filteredTrips[selectedTripIndex]; // Find the actual trip
-    onTripSelect(trip);
+    if (selectedDate) {
+      const { startOfDay, endOfDay } = getStartEndTimestamps(selectedDate);
+      onTripSelect(startOfDay, endOfDay);
+    } else {
+      alert("Please select a date first.");
+    }
   };
-
-  // Filter trips by selected date
-  const filteredTrips = selectedDate
-    ? trips.filter((trip) => formatDate(trip.to[2]) === selectedDate)
-    : [];
-
   return (
     <div className="w-full sm:w-[30%] h-[calc(100vh-48px)] mt-[120px] bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white p-6 z-10 overflow-y-auto shadow-lg">
       <h3 className="text-3xl font-extrabold mb-6 text-center tracking-widest text-gradient">
@@ -56,38 +56,6 @@ const Sidebar = ({ info, trips, onTripSelect }) => {
         />
       </div>
 
-      {/* Trip Selector */}
-      <div className="mb-6">
-        <label className="block text-lg font-semibold mb-2">Select a Trip</label>
-        <div className="flex items-center gap-2">
-          <select
-            className="w-full p-3 rounded-lg bg-gray-800 text-white shadow-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-            value={selectedTrip}
-            onChange={handleTripChange}
-          >
-            <option value="" disabled>
-              Choose a Trip
-            </option>
-            {filteredTrips.length > 0 ? (
-              filteredTrips.map((_, i) => (
-                <option key={i} value={`Trip ${i + 1}`}>
-                  Trip {i + 1}
-                </option>
-              ))
-            ) : (
-              <option disabled>No Trips Available</option>
-            )}
-          </select>
-          <button
-            className="px-5 py-3 bg-yellow-500 text-black font-semibold rounded-lg shadow-md hover:bg-yellow-600 transition-all"
-            onClick={handleSearch}
-            disabled={!selectedTrip}
-          >
-            Search
-          </button>
-        </div>
-      </div>
-
       {/* Vehicle Details */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6 text-center">
         <div>
@@ -104,32 +72,20 @@ const Sidebar = ({ info, trips, onTripSelect }) => {
         </div>
       </div>
 
-      {/* Statistics */}
-      <div className="space-y-4 border-t border-gray-700 pt-4">
-        <div className="flex justify-between items-center">
-          <p className="text-lg text-white/70">Total Distance</p>
-          <span className="text-xl font-bold">{info.totalDistance} km</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <p className="text-lg text-white/70">Toll Distance</p>
-          <span className="text-xl font-bold">{info.tollDistance.toFixed(2)} km</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <p className="text-lg text-white/70">Toll Cost</p>
-          <span className="text-xl font-bold">₹{info.tollCost.toFixed(2)}</span>
-        </div>
-      </div>
-
-      {/* Timestamps */}
-      <div className="mt-6 border-t border-gray-700 pt-4">
-        <div className="flex justify-between items-center mb-3">
-          <p className="text-lg text-white/70">Entry Time</p>
-          <span className="text-sm font-medium">{info.entryTime || "-"}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <p className="text-lg text-white/70">Exit Time</p>
-          <span className="text-sm font-medium">{info.exitTime || "-"}</span>
-        </div>
+      {/* History Buttons */}
+      <div className="flex justify-center gap-4">
+        <button
+          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all"
+          onClick={handleSearch}
+        >
+          Day History
+        </button>
+        <button
+          className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-all"
+          onClick={handleAllHistory}
+        >
+          All History
+        </button>
       </div>
     </div>
   );

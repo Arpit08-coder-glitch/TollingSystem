@@ -1,0 +1,73 @@
+import L from "leaflet";
+
+export const highlightPoints = async (mapRef, startTimeStamp, endTimeStamp) => {
+
+let featureCoordinates2;
+const url = `https://vts.quantasip.com/vts/interval-gps-data?start_time=${startTimeStamp}&end_time=${endTimeStamp}`;
+
+try {
+  const response = await fetch(url);
+  if (response.ok) {
+    const data = await response.json();
+    featureCoordinates2 = data.map((coordinate) => {
+      return {
+        lat: coordinate.latitude,
+        lon: coordinate.longitude,
+        timestamp: coordinate.timestamp, // Fetching timestamp
+      };
+    });
+  } else {
+    console.error("Error fetching coordinates");
+  }
+} catch (error) {
+  console.error("Error fetching coordinates:", error);
+}
+// Check if featureCoordinates2 has valid data
+if (featureCoordinates2 && featureCoordinates2.length > 0) {
+     // Clear existing markers
+     if (mapRef.current.markers) {
+        mapRef.current.markers.forEach(marker => marker.remove());
+        mapRef.current.markers = [];
+      } else {
+        mapRef.current.markers = [];
+      }
+      
+      if (mapRef.current.routeMarkers) {
+        mapRef.current.routeMarkers.forEach(marker => mapRef.current.removeLayer(marker));
+        mapRef.current.routeMarkers = [];
+      }
+      if (mapRef.current.routingControl) {
+        mapRef.current.routingControl.getPlan().setWaypoints([]); // Clear waypoints
+        mapRef.current.routingControl.remove(); // Remove the route from the map
+        mapRef.current.routingControl = null; // Reset the reference
+      }
+  // Loop through each coordinate and create a marker
+  featureCoordinates2.forEach((coord) => {
+
+    const marker = L.marker([coord.lat, coord.lon]).addTo(mapRef.current);
+
+    // Convert timestamp to readable format
+    const date = new Date(parseInt(coord.timestamp));
+    const formattedDate = date.toLocaleString();
+
+    // Bind popup to show latitude, longitude, and timestamp
+    marker.bindPopup(
+      `
+        <div>
+          <strong>Latitude:</strong> ${coord.lat}<br>
+          <strong>Longitude:</strong> ${coord.lon}<br>
+          <strong>Timestamp:</strong> ${formattedDate}
+        </div>`
+    );
+    mapRef.current.markers.push(marker);
+  });
+
+  // Zoom to the bounds of all markers
+  const bounds = featureCoordinates2.map((coord) =>
+    L.latLng(coord.lat, coord.lon)
+  );
+  mapRef.current.fitBounds(bounds);
+} else {
+  console.error("No coordinates available for markers");
+}
+};
